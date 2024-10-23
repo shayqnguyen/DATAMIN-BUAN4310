@@ -1,0 +1,162 @@
+---
+title: "BUAN4310 LR Lab 2"
+author: "Shayla Nguyen"
+date: "2024-10-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+1. PREPARE THE DATA
+```{r}
+# Import the data
+library(readr)
+library(ggplot2)
+admin_df <- read_csv("SystemAdministrators_v2.csv")
+```
+
+```{r}
+head(admin_df)
+```
+```{r}
+str(admin_df)
+```
+
+2. CREATE A SCATTER PLOT
+```{r}
+# Scatter Plot
+ggplot(admin_df, aes(x = Training, y = Experience, 
+                     color = as.factor(Completed.task))) +
+  geom_point() +
+  scale_color_manual(values = c("pink", "purple")) +
+  labs(title = "Scatter Plot of Training vs. Experience",
+       x = "Training",
+       y = "Experience",
+       color = "Completed Task") +
+  theme_dark()
+```
+
+3. LOGISTIC REGRESSION MODEL 
+```{r}
+# Change the outcome variable to a factor
+admin_df$Completed.task <- as.factor(admin_df$Completed.task)
+```
+
+```{r}
+# Setting the seed 
+set.seed(666)
+```
+
+```{r}
+train_index <- sample(1:nrow(admin_df), 0.7 * nrow(admin_df))
+valid_index <- setdiff(1:nrow(admin_df), train_index)
+```
+
+```{r}
+train_df <- admin_df[train_index, ]
+valid_df <- admin_df[valid_index, ]
+```
+
+```{r}
+nrow(train_df)
+nrow(valid_df)
+```
+
+```{r}
+library(caret)
+```
+
+```{r}
+# Train Logistic regression model
+
+logistic_reg <- train(Completed.task ~ Experience + Training + Team,
+                      data = train_df, method = "glm")
+summary(logistic_reg)
+```
+```{r}
+logistic_reg_pred_train <- predict(logistic_reg, 
+                                   newdata = train_df, type = "raw")
+
+head(logistic_reg_pred_train)
+```
+
+```{r}
+logistic_reg_pred_train_prob <- predict(logistic_reg, 
+                                        newdata = train_df, type = "prob")
+
+head(logistic_reg_pred_train_prob)
+```
+```{r}
+# Confusion Matrix for Training Set 
+confusionMatrix(logistic_reg_pred_train, train_df$Completed.task)
+```
+```{r}
+con_mat_train <- confusionMatrix(as.factor(logistic_reg_pred_train), 
+                                 as.factor(train_df$Completed.task), positive = "1")
+
+# Sensitivity (Recall) and Precision for the training set
+sensitivity_train <- con_mat_train$byClass["Sensitivity"]
+precision_train <- con_mat_train$byClass["Pos Pred Value"]
+
+# F1 score for the training set
+f1_train <- 2 / ((1 / sensitivity_train) + (1 / precision_train))
+f1_train <- unname(f1_train)  # Remove awkward naming
+
+paste("The F1 score for the training set is", f1_train)
+```
+
+```{r}
+# Confusion for validation set 
+logistic_reg_pred_valid <- predict(logistic_reg, newdata = valid_df, type = "raw")
+confusionMatrix(logistic_reg_pred_valid, valid_df$Completed.task)
+```
+```{r}
+con_mat_valid <- confusionMatrix(as.factor(logistic_reg_pred_valid), 
+                                 as.factor(valid_df$Completed.task), positive = "1")
+
+# Sensitivity (Recall) and Precision for the validation set
+sensitivity_valid <- con_mat_valid$byClass["Sensitivity"]
+precision_valid <- con_mat_valid$byClass["Pos Pred Value"]
+
+# F1 score for the validation set
+f1_valid <- 2 / ((1 / sensitivity_valid) + (1 / precision_valid))
+f1_valid <- unname(f1_valid)  # Remove awkward naming
+
+paste("The F1 score for the validation set is", f1_valid)
+```
+
+
+```{r}
+library(pROC)
+```
+
+```{r}
+# ROC curve for validation set
+roc_curve <- roc(valid_df$Completed.task, as.numeric(logistic_reg_pred_valid))
+plot(roc_curve, main = "ROC Curve for Validation Set")
+auc(roc_curve)
+```
+4. PREDICTION FOR NEW SYSTEM ADMIN.
+```{r}
+# Input new data
+library(readr)
+new_admin_df <- read_csv("new_sys_admin.csv")
+```
+
+```{r}
+# Predict task completion for the new system administrators
+new_admin_pred <- predict(logistic_reg, newdata = new_admin_df, type = "raw")
+new_admin_pred_prob <- predict(logistic_reg, newdata = new_admin_df, type = "prob")
+```
+
+```{r}
+# Display predictions and probabilities for the new administrators
+new_admin_df$Predicted_Task_Completion <- new_admin_pred
+new_admin_df$Predicted_Probabilities <- new_admin_pred_prob
+```
+
+```{r}
+new_admin_df
+```
+

@@ -1,0 +1,226 @@
+---
+title: "BUAN4310 AIdol Example"
+author: "Shayla Nguyen"
+date: "2024-10-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. LOADING THE DATA
+```{r}
+#Load the data
+library(readr)
+songs <- read_csv("american_idol_songs_v8.csv")
+View(american_idol_songs_v8)
+```
+
+```{r}
+#Check the top 6 rows
+head(songs)
+```
+
+```{r}
+#Check data types
+str(songs)
+```
+
+```{r}
+#Look at Y variable
+table(songs$Advance)
+```
+
+2. PREPROCESSING
+```{r}
+#2.1 Filter Variables
+
+#Factorizing - tells R to not read it as numerical number
+songs$Advance <- as.factor(songs$Advance)
+str(songs)
+```
+
+```{r}
+t(t(names(songs)))
+```
+
+```{r}
+songs <- songs[, c(4, 6, 10, 11, 7)]
+
+head(songs)
+```
+
+```{r}
+str(songs)
+```
+
+```{r}
+#2.2 Training Validation Set
+#Set seed
+set.seed(666)
+```
+
+```{r}
+#Create indices training and validation split 
+train_index <- sample(1:nrow(songs), 0.7 * nrow(songs))
+valid_index <- setdiff(1:nrow(songs), train_index)
+```
+
+```{r}
+#Using indices, create training and validation sets
+train_df <- songs[train_index, ]
+valid_df <- songs[valid_index, ]
+```
+
+```{r}
+#Check after splitting 
+nrow(train_df)
+nrow(valid_df)
+```
+
+3. LOGISTIC REGRESSION
+```{r}
+library(caret)
+```
+
+```{r}
+#Trying to predict advance or the y variable 
+logistic_reg <- train(Advance ~ Song_Avg_Rtg + Avg_Song_Age + Expectation +
+                      Artiste_Rating,
+                    data = train_df, method = "glm")
+summary(logistic_reg)
+```
+
+```{r}
+# VarImp calculates variable importance scores based on how much the inclusion of a variable improves the predictive power of the model. Tells you which variable is more important than others, which can help us determine which variable to remove 
+
+# Used to avoid over fitting
+varImp(logistic_reg)
+```
+```{r}
+# Predict training set 
+# Preforming logistic regression model 
+logistic_reg_pred_train <- predict(logistic_reg, newdata = train_df, type = "raw")
+
+head(logistic_reg_pred_train)
+```
+```{r}
+logistic_reg_pred_train_prob <- predict(logistic_reg, newdata = train_df, type = "prob")
+
+head(logistic_reg_pred_train_prob)
+
+# Default = 50%
+```
+```{r}
+#Predicting the Validation Set 
+logistic_reg_pred_valid <- predict(logistic_reg, newdata = valid_df, type = "raw")
+
+head(logistic_reg_pred_valid)
+```
+```{r}
+logistic_reg_pred_valid_prob <- predict(logistic_reg, newdata = valid_df, type = "prob")
+
+head(logistic_reg_pred_valid_prob)
+```
+4. MODEL EVAULUATION
+```{r}
+library("Hmisc")
+```
+
+```{r}
+# Correlation Matrix
+rcorr(as.matrix(train_df[, -c(5)]))
+```
+```{r}
+#Confusion Matrix Traning Set
+confusionMatrix(as.factor(logistic_reg_pred_train), train_df$Advance, positive = "1")
+```
+```{r}
+#F1 Score for Training Set
+con_mat_train <- confusionMatrix(as.factor(logistic_reg_pred_train), 
+                train_df$Advance, positive = "1")
+
+sensitivity_train <- con_mat_train$byClass[1]
+
+precision_train <- con_mat_train$byClass[3]
+
+f1_train <- 2/((1/sensitivity_train) + (1/precision_train))
+
+
+paste("The F1 score for traination is", f1_train)
+```
+```{r}
+#Confusion Matrix for Validation Set 
+confusionMatrix(as.factor(logistic_reg_pred_valid), 
+                valid_df$Advance, positive = "1")
+```
+```{r}
+# F1 score for Validation Set
+con_mat_valid <- confusionMatrix(as.factor(logistic_reg_pred_valid), 
+                valid_df$Advance, positive = "1")
+
+sensitivity_valid <- con_mat_valid$byClass[1]
+
+precision_valid <- con_mat_valid$byClass[3]
+
+f1_valid <- 2/((1/sensitivity_valid) + (1/precision_valid))
+
+paste("The F1 score for validation is", f1_valid)
+```
+```{r}
+#ROC Curve 
+ROSE::roc.curve(valid_df$Advance, logistic_reg_pred_valid)
+```
+5. PREDICT NEW SONGS 
+```{r}
+#Import new songs
+new_songs <- read.csv("new_songs.csv", header = TRUE)
+View(new_songs)
+```
+
+```{r}
+# Filter the Variables 
+names(new_songs)
+```
+```{r}
+new_songs_filter <- new_songs [, c(4, 6, 10, 11)]
+new_songs_filter
+```
+
+```{r}
+# Predict 
+logistic_reg_pred_new_songs <- predict(logistic_reg, 
+                                   newdata = new_songs_filter, type = "raw")
+
+head(logistic_reg_pred_new_songs)
+```
+```{r}
+logistic_reg_pred_new_songs_prob <- predict(logistic_reg, 
+                                   newdata = new_songs_filter, type = "prob")
+
+head(logistic_reg_pred_new_songs_prob)
+```
+
+```{r}
+logistic_reg_pred_new_songs_df <- as.data.frame(logistic_reg_pred_new_songs)
+names(logistic_reg_pred_new_songs_df)[1] <- "Prediction"
+```
+
+```{r}
+names(logistic_reg_pred_new_songs_prob)[2] <- "Probability"
+```
+
+```{r}
+new_songs_prediction_df <- cbind(new_songs[c(2:3)], logistic_reg_pred_new_songs_df,
+                                 logistic_reg_pred_new_songs_prob[2]) 
+new_songs_prediction_df
+```
+
+```{r}
+new_songs_prediction_df$Prediction <- ifelse(new_songs_prediction_df$Probability > 0.8,
+                                             "1", "0")
+
+new_songs_prediction_df
+```
+
