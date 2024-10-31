@@ -1,0 +1,161 @@
+---
+title: "Untitled"
+author: "Shayla Nguyen"
+date: "2024-10-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(caret)
+library(ROSE)
+library(pROC)
+library(readr)
+
+# Load the credit31 data
+credit31 <- read_csv("credit_31.csv")
+```
+
+```{r}
+# Add new fields into data frame to improve model accuracy
+credit31$Income_Credit_Ratio <- credit31$AMT_INCOME_TOTAL / credit31$AMT_CREDIT
+credit31$Annuity_Income_Ratio <- credit31$AMT_ANNUITY / credit31$AMT_INCOME_TOTAL
+credit31$Credit_As_Percentage <- credit31$AMT_CREDIT / credit31$AMT_INCOME_TOTAL
+credit31$Percent_Days_Employed <- credit31$DAYS_EMPLOYED / credit31$DAYS_BIRTH
+credit31$Income_Per_Person <- credit31$AMT_INCOME_TOTAL / credit31$CNT_FAM_MEMBERS
+
+# Remove XNA from CODE_GENDER variable and convert to factor
+credit31 <- credit31[credit31$CODE_GENDER != "XNA", ]
+credit31$CODE_GENDER <- factor(credit31$CODE_GENDER)
+
+# Explore data
+names(credit31)
+str(credit31)
+summary(credit31$TARGET)
+
+# Convert education type to factor with levels across education 
+credit31$NAME_EDUCATION_TYPE <- factor(credit31$NAME_EDUCATION_TYPE, levels = c(
+  "Secondary / secondary special",
+  "Higher education",
+  "Lower secondary",
+  "Incomplete higher",
+  "Academic degree"))
+
+# Set Target variable as factor 
+credit31$TARGET <- as.factor(credit31$TARGET)
+
+# Variable list 
+# Percent_Days_Employed, NAME_EDUCATION_TYPE, REGION_RATING_CLIENT_W_CITY, AMT_GOODS_PRICE, CODE_GENDER, DAYS_BIRTH, AMT_CREDIT, AMT_ANNUITY, DAYS_EMPLOYED, DAYS_REGISTRATION, DAYS_ID_PUBLISH, Annuity_Income_Ratio
+
+# Remove unused variables
+credit31 <- credit31[ , -c(1:2, 4, 6:9, 13:14, 16:17, 22:31, 33:69, 71, 73)]
+names(credit31)
+
+# Training - Validation split 
+set.seed(666)
+train_index <- sample(1:nrow(credit31), 0.7 * nrow(credit31))
+valid_index <- setdiff(1:nrow(credit31), train_index)
+train_df <- credit31[train_index, ]
+valid_df <- credit31[valid_index, ]
+
+# Double check 
+nrow(train_df)
+nrow(valid_df)
+head(train_df)
+head(valid_df)
+str(train_df)
+str(valid_df)
+
+# Use ROSE to balance model
+train_df_rose <- ROSE(TARGET ~ Percent_Days_Employed + NAME_EDUCATION_TYPE + REGION_RATING_CLIENT_W_CITY + AMT_GOODS_PRICE + CODE_GENDER + DAYS_BIRTH + AMT_CREDIT + AMT_ANNUITY + DAYS_EMPLOYED + DAYS_REGISTRATION + DAYS_ID_PUBLISH + Annuity_Income_Ratio,
+                      data = train_df, seed = 666)$data
+
+table(train_df_rose$TARGET)
+
+# Normalization algorithm
+train_norm <- train_df_rose
+valid_norm <- valid_df
+
+norm_values <- preProcess(train_df_rose[, -c(1)],
+                          method = c("center", "scale"))
+train_norm[, -c(1)] <- predict(norm_values,
+                                train_df_rose[, -c(1)])
+
+# Apply to validation set 
+valid_norm[, -c(1)] <- predict(norm_values,
+                                valid_df[, -c(1)])
+
+# Drop missing values
+library(tidyr)
+valid_norm <- drop_na(valid_norm)
+
+# Train logistic regression model
+logistic_model <- glm(TARGET ~ Percent_Days_Employed + NAME_EDUCATION_TYPE + REGION_RATING_CLIENT_W_CITY + AMT_GOODS_PRICE + CODE_GENDER + DAYS_BIRTH + AMT_CREDIT + AMT_ANNUITY + DAYS_EMPLOYED + DAYS_REGISTRATION + DAYS_ID_PUBLISH + Annuity_Income_Ratio,
+                      data = train_norm, family = binomial)
+
+# Prediction on training set
+logistic_pred_train <- predict(logistic_model, newdata = train_norm, type = "response")
+logistic_pred_train_class <- ifelse(logistic_pred_train > 0.5, 1, 0)
+
+# Prediction on validation set 
+logistic_pred_valid <- predict(logistic_model, newdata = valid_norm, type = "response")
+logistic_pred_valid_class <- ifelse(logistic_pred_valid > 0.5, 1, 0)
+
+# Confusion matrix on training set 
+confusionMatrix(as.factor(logistic_pred_train_class), as.factor(train_norm$TARGET), positive = "1")
+
+# Confusion matrix on validation set 
+confusionMatrix(as.factor(logistic_pred_valid_class), as.factor(valid_norm$TARGET), positive = "1")
+
+# Model Evaluation
+library(ROSE)
+ROSE::roc.curve(valid_norm$TARGET, logistic_pred_valid)
+
+# Load new customer data
+new_customers <- read_csv("credit_test_31.csv")
+View(credit_test_31)
+
+# Preprocess new customer data
+new_customers$Income_Credit_Ratio <- new_customers$AMT_INCOME_TOTAL / new_customers$AMT_CREDIT
+new_customers$Annuity_Income_Ratio <- new_customers$AMT_ANNUITY / new_customers$AMT_INCOME_TOTAL
+new_customers$Credit_As_Percentage <- new_customers$AMT_CREDIT / new_customers$AMT_INCOME_TOTAL
+new_customers$Percent_Days_Employed <- new_customers$DAYS_EMPLOYED / new_customers$DAYS_BIRTH
+new_customers$Income_Per_Person <- new_customers$AMT_INCOME_TOTAL / new_customers$CNT_FAM_MEMBERS
+
+# Remove XNA from CODE_GENDER variable and convert to factor
+new_customers <- new_customers[new_customers$CODE_GENDER != "XNA", ]
+new_customers$CODE_GENDER <- factor(new_customers$CODE_GENDER)
+
+# Convert education type to factor with levels across education 
+new_customers$NAME_EDUCATION_TYPE <- factor(new_customers$NAME_EDUCATION_TYPE, levels = c(
+  "Secondary / secondary special",
+  "Higher education",
+  "Lower secondary",
+  "Incomplete higher",
+  "Academic degree"))
+
+# Normalize new customer data using the same scaling as the training data
+new_customers_norm <- predict(norm_values, new_customers[, -c(1)])
+
+# Predict risk of new customers
+new_customer_predictions <- predict(logistic_model, newdata = new_customers_norm, type = "response")
+new_customer_predictions_class <- ifelse(new_customer_predictions > 0.5, 1, 0)
+
+# Display predictions for new customers
+new_customer_results <- data.frame(new_customers, Predicted_Risk = new_customer_predictions_class)
+head(new_customer_results)
+```
+```{r}
+new_customer_results <- data.frame(
+  Customer_ID = new_customers$SK_ID_CURR,  # Replace with the actual identifier column if different
+  Prediction = new_customer_predictions_class,
+  Probability = new_customer_predictions
+)
+
+# Format and display top results for clarity
+head(new_customer_results[order(-new_customer_results$Probability), ])  # Top predictions with high probability
+```
+
