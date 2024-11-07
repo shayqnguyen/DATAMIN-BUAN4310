@@ -879,6 +879,97 @@ head(new_customer_results[order(-new_customer_results$Probability), ])  # Top pr
 ## 2      440463          1   0.5713890
 ## 5      407346          0   0.4692277
 ## 4      235118          0   0.4174471</code></pre>
+<pre class="r"><code># Calculate accuracy for training set
+train_accuracy &lt;- mean(logistic_pred_train_class == train_norm$TARGET) * 100
+
+# Calculate accuracy for validation set
+valid_accuracy &lt;- mean(logistic_pred_valid_class == valid_norm$TARGET) * 100
+
+# Print accuracy results
+cat(&quot;Training Accuracy:&quot;, round(train_accuracy, 2), &quot;%\n&quot;)</code></pre>
+<pre><code>## Training Accuracy: 59.65 %</code></pre>
+<pre class="r"><code>cat(&quot;Validation Accuracy:&quot;, round(valid_accuracy, 2), &quot;%\n&quot;)</code></pre>
+<pre><code>## Validation Accuracy: 57.75 %</code></pre>
+<pre class="r"><code># Load required libraries
+library(caret)
+
+# Confusion matrix for training set
+train_conf_matrix &lt;- confusionMatrix(as.factor(logistic_pred_train_class), as.factor(train_norm$TARGET), positive = &quot;1&quot;)
+cat(&quot;Training Confusion Matrix:\n&quot;)</code></pre>
+<pre><code>## Training Confusion Matrix:</code></pre>
+<pre class="r"><code>print(train_conf_matrix)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    0    1
+##          0 5773 3900
+##          1 4566 6742
+##                                           
+##                Accuracy : 0.5965          
+##                  95% CI : (0.5898, 0.6031)
+##     No Information Rate : 0.5072          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.1921          
+##                                           
+##  Mcnemar&#39;s Test P-Value : 4.923e-13       
+##                                           
+##             Sensitivity : 0.6335          
+##             Specificity : 0.5584          
+##          Pos Pred Value : 0.5962          
+##          Neg Pred Value : 0.5968          
+##              Prevalence : 0.5072          
+##          Detection Rate : 0.3213          
+##    Detection Prevalence : 0.5390          
+##       Balanced Accuracy : 0.5959          
+##                                           
+##        &#39;Positive&#39; Class : 1               
+## </code></pre>
+<pre class="r"><code># Calculate F1 score for training set
+train_precision &lt;- train_conf_matrix$byClass[&quot;Pos Pred Value&quot;]
+train_recall &lt;- train_conf_matrix$byClass[&quot;Sensitivity&quot;]
+train_f1 &lt;- 2 * ((train_precision * train_recall) / (train_precision + train_recall))
+cat(&quot;Training F1 Score:&quot;, round(train_f1, 2), &quot;\n&quot;)</code></pre>
+<pre><code>## Training F1 Score: 0.61</code></pre>
+<pre class="r"><code># Confusion matrix for validation set
+valid_conf_matrix &lt;- confusionMatrix(as.factor(logistic_pred_valid_class), as.factor(valid_norm$TARGET), positive = &quot;1&quot;)
+cat(&quot;\nValidation Confusion Matrix:\n&quot;)</code></pre>
+<pre><code>## 
+## Validation Confusion Matrix:</code></pre>
+<pre class="r"><code>print(valid_conf_matrix)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    0    1
+##          0 4027  600
+##          1 3198 1165
+##                                           
+##                Accuracy : 0.5775          
+##                  95% CI : (0.5672, 0.5878)
+##     No Information Rate : 0.8037          
+##     P-Value [Acc &gt; NIR] : 1               
+##                                           
+##                   Kappa : 0.1397          
+##                                           
+##  Mcnemar&#39;s Test P-Value : &lt;2e-16          
+##                                           
+##             Sensitivity : 0.6601          
+##             Specificity : 0.5574          
+##          Pos Pred Value : 0.2670          
+##          Neg Pred Value : 0.8703          
+##              Prevalence : 0.1963          
+##          Detection Rate : 0.1296          
+##    Detection Prevalence : 0.4853          
+##       Balanced Accuracy : 0.6087          
+##                                           
+##        &#39;Positive&#39; Class : 1               
+## </code></pre>
+<pre class="r"><code># Calculate F1 score for validation set
+valid_precision &lt;- valid_conf_matrix$byClass[&quot;Pos Pred Value&quot;]
+valid_recall &lt;- valid_conf_matrix$byClass[&quot;Sensitivity&quot;]
+valid_f1 &lt;- 2 * ((valid_precision * valid_recall) / (valid_precision + valid_recall))
+cat(&quot;Validation F1 Score:&quot;, round(valid_f1, 2), &quot;\n&quot;)</code></pre>
+<pre><code>## Validation F1 Score: 0.38</code></pre>
 
 
 
