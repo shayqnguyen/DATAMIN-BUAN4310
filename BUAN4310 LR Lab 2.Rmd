@@ -37,126 +37,132 @@ ggplot(admin_df, aes(x = Training, y = Experience,
   theme_dark()
 ```
 
-3. LOGISTIC REGRESSION MODEL 
 ```{r}
-# Change the outcome variable to a factor
-admin_df$Completed.task <- as.factor(admin_df$Completed.task)
+# 1. Load Data
+songs <- read.csv("american_idol_songs_v8.csv", header = TRUE)
+head(songs, 10)
 ```
 
+
 ```{r}
-# Setting the seed 
+# 2. PreProcessing
+## 2.1 Filter Variables
+# Factorizing 'Advance' column
+songs$Advance <- as.factor(songs$Advance)
+
+# Keep necessary columns
+songs <- songs[, c(4, 6, 10, 11, 7)]
+head(songs)
+```
+
+
+```{r}
+## 2.2 Training-Validation Split
+# Set seed for reproducibility
 set.seed(666)
-```
 
-```{r}
-train_index <- sample(1:nrow(admin_df), 0.7 * nrow(admin_df))
-valid_index <- setdiff(1:nrow(admin_df), train_index)
-```
+# Split the data into training and validation sets (70%-30%)
+train_index <- sample(1:nrow(songs), 0.7 * nrow(songs))
+valid_index <- setdiff(1:nrow(songs), train_index)
 
-```{r}
-train_df <- admin_df[train_index, ]
-valid_df <- admin_df[valid_index, ]
-```
+# Create training and validation sets
+train_df <- songs[train_index, ]
+valid_df <- songs[valid_index, ]
 
-```{r}
+# Check split
 nrow(train_df)
 nrow(valid_df)
 ```
 
+
 ```{r}
+# 3. Logistic Regression
 library(caret)
-```
 
-```{r}
-# Train Logistic regression model
-
-logistic_reg <- train(Completed.task ~ Experience + Training + Team,
+# Train logistic regression model
+logistic_reg <- train(Advance ~ Song_Avg_Rtg + Avg_Song_Age + Expectation + Artiste_Rating,
                       data = train_df, method = "glm")
+
+# Summary of the model
 summary(logistic_reg)
+
+# Variable importance
+varImp(logistic_reg)
 ```
+
+
 ```{r}
+# Predict the training set
 logistic_reg_pred_train <- predict(logistic_reg, 
                                    newdata = train_df, type = "raw")
-
-head(logistic_reg_pred_train)
-```
-
-```{r}
 logistic_reg_pred_train_prob <- predict(logistic_reg, 
                                         newdata = train_df, type = "prob")
 
-head(logistic_reg_pred_train_prob)
-```
-```{r}
-# Confusion Matrix for Training Set 
-confusionMatrix(logistic_reg_pred_train, train_df$Completed.task)
-```
-```{r}
-con_mat_train <- confusionMatrix(as.factor(logistic_reg_pred_train), 
-                                 as.factor(train_df$Completed.task), positive = "1")
-
-# Sensitivity (Recall) and Precision for the training set
-sensitivity_train <- con_mat_train$byClass["Sensitivity"]
-precision_train <- con_mat_train$byClass["Pos Pred Value"]
-
-# F1 score for the training set
-f1_train <- 2 / ((1 / sensitivity_train) + (1 / precision_train))
-f1_train <- unname(f1_train)  # Remove awkward naming
-
-paste("The F1 score for the training set is", f1_train)
-```
-
-```{r}
-# Confusion for validation set 
-logistic_reg_pred_valid <- predict(logistic_reg, newdata = valid_df, type = "raw")
-confusionMatrix(logistic_reg_pred_valid, valid_df$Completed.task)
-```
-```{r}
-con_mat_valid <- confusionMatrix(as.factor(logistic_reg_pred_valid), 
-                                 as.factor(valid_df$Completed.task), positive = "1")
-
-# Sensitivity (Recall) and Precision for the validation set
-sensitivity_valid <- con_mat_valid$byClass["Sensitivity"]
-precision_valid <- con_mat_valid$byClass["Pos Pred Value"]
-
-# F1 score for the validation set
-f1_valid <- 2 / ((1 / sensitivity_valid) + (1 / precision_valid))
-f1_valid <- unname(f1_valid)  # Remove awkward naming
-
-paste("The F1 score for the validation set is", f1_valid)
+# Predict the validation set
+logistic_reg_pred_valid <- predict(logistic_reg, 
+                                   newdata = valid_df, type = "raw")
+logistic_reg_pred_valid_prob <- predict(logistic_reg, 
+                                        newdata = valid_df, type = "prob")
 ```
 
 
 ```{r}
+# 4. Model Evaluation
+## Multicollinearity Check
+library(Hmisc)
+```
+
+
+```{r}
+# Calculate correlation matrix
+rcorr(as.matrix(train_df[, -c(5)]))
+
+# Confusion Matrix for Training Data
+confusionMatrix(logistic_reg_pred_train, train_df$Advance, positive = "1")
+
+# Confusion Matrix for Validation Data
+confusionMatrix(logistic_reg_pred_valid, valid_df$Advance, positive = "1")
+
+```
+
+
+```{r}
+# ROC Curve for Training Data
 library(pROC)
+
+# ROC curve for the training data
+roc_train <- roc(train_df$Advance, logistic_reg_pred_train_prob[, 2])
+plot(roc_train, col = "blue", main = "ROC Curve (Training Data)")
+
+# ROC curve for the validation data
+roc_valid <- roc(valid_df$Advance, logistic_reg_pred_valid_prob[, 2])
+plot(roc_valid, col = "red", main = "ROC Curve (Validation Data)")
 ```
 
+
 ```{r}
-# ROC curve for validation set
-roc_curve <- roc(valid_df$Completed.task, as.numeric(logistic_reg_pred_valid))
-plot(roc_curve, main = "ROC Curve for Validation Set")
-auc(roc_curve)
-```
-4. PREDICTION FOR NEW SYSTEM ADMIN.
-```{r}
-# Input new data
+# 5. PREDICTION FOR NEW SONGS
+## Example of how to predict for new songs (new dataset for new songs)
+
+# Input new data (replace with your actual new song data)
 library(readr)
-new_admin_df <- read_csv("new_sys_admin.csv")
+new_songs_df <- read_csv("new_songs.csv")
+
+# Predict task completion for the new songs
+new_songs_pred <- predict(logistic_reg, newdata = new_songs_df, type = "raw")
+new_songs_pred_prob <- predict(logistic_reg, newdata = new_songs_df, type = "prob")
 ```
 
-```{r}
-# Predict task completion for the new system administrators
-new_admin_pred <- predict(logistic_reg, newdata = new_admin_df, type = "raw")
-new_admin_pred_prob <- predict(logistic_reg, newdata = new_admin_df, type = "prob")
-```
 
 ```{r}
-# Display predictions and probabilities for the new administrators
-new_admin_df$Predicted_Task_Completion <- new_admin_pred
-new_admin_df$Predicted_Probabilities <- new_admin_pred_prob
-```
+# Display predictions and probabilities for the new songs
+new_songs_df$Predicted_Advance <- new_songs_pred
+new_songs_df$Predicted_Probabilities <- new_songs_pred_prob
 
-```{r}
-new_admin_df
+# View the predictions
+new_songs_df
+new_songs_pred_prob
+new_songs_pred
+
 ```
 
